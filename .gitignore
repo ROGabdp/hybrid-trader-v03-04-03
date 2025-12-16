@@ -58,5 +58,4 @@ Thumbs.db
 # Results & Model Outputs (Large Files)
 results_backtest_*/
 results_hybrid_*/
-saved_models_*/
 tensorboard_logs/
