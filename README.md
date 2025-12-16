@@ -2,9 +2,9 @@
 
 這是一個先進的演算法交易系統，結合了用於價格預測的 **LSTM-SSAM** (Long Short-Term Memory with Sequential Self-Attention) 以及用於交易決策的 **Pro Trader RL** (Reinforcement Learning)。
 
-# v03-04-03重點
+# v03-04-03重點 (目前績效最好版本)
 
-沿用
+沿用:
 - 由前一版 v03-04 升級，沿用較積極的buy agent，是追求獲利的版本。 
 - 沿用先前的 fixed_lstm 每日回測和盤中觀測AI可能交易模式，並臨摹之。
 
@@ -13,6 +13,56 @@
 - 使用最佳模型：訓練結束後複製 best_model.zip 為 base.zip / final.zip
 - 這個版本主要 增加 KD/ MACD 到RL的訓練當中
 
+績效  (以backtest_v4_with_filter回測):
+核心績效指標
+指標	    V4 With Filter	   Buy & Hold	   優勢
+總報酬率	+103.9%	            +93.6%	     ✅ +10.3%
+年化報酬率	27.3%	            25.1%	       ✅ +2.2%
+夏普比率	1.84	              1.17	       ✅ +57% 風險調整報酬
+最大回撤	-13.4%	            -28.7%	     ✅ 回撤減少 53%
+
+📈 交易統計
+指標	           數值
+交易次數	       5 筆
+勝率	          100% (5/5)
+平均報酬	      +17.7%
+平均持有天數	  120 天
+被過濾次數	    68 次
+
+📊 三版本績效比較 (V03-03 → V03-04 → V03-04-03)
+
+指標	   V03-03	  V03-04	V03-04-03	   最佳版本
+總報酬率	+66.2%	+74.7%	 +103.9%	  🏆 V03-04-03
+年化報酬率	18.8%	 20.9%	  27.3%	    🏆 V03-04-03
+夏普比率	 1.25	   1.48	   1.84	      🏆 V03-04-03
+最大回撤	-17.1%	-17.3%	-13.4%	    🏆 V03-04-03
+勝率	     80%	  80%	    100%  	    🏆 V03-04-03
+平均報酬	 +12.9%	+14.4%	+17.7%	    🏆 V03-04-03
+平均持有天數	106	  111	   120	-
+被過濾次數	15	   64	    68	-
+
+📈 版本演進趨勢
+總報酬率：66.2% → 74.7% → 103.9%  (持續上升 ↑)
+夏普比率：1.25 → 1.48 → 1.84     (持續上升 ↑)
+最大回撤：-17.1% → -17.3% → -13.4% (第三版明顯改善)
+勝率：   80% → 80% → 100%        (第三版突破)
+
+✨ 關鍵改進分析
+版本升級	主要改進	報酬增加
+V03-03 → V03-04	更積極的 Buy Agent	+8.5%
+V03-04 → V03-04-03	新增 KD/MACD 特徵	+29.2%
+累計改進		+37.7%
+
+🎯 結論
+V03-04-03 是目前最佳版本：
+
+報酬最高 (+103.9%)
+風險最低 (回撤 -13.4%)
+勝率最高 (100%)
+每筆交易賺最多 (+17.7%)
+
+新增 KD/MACD 特徵的效果非常顯著，帶來了約 30% 的報酬提升！
+
 Note:
 - V4: 訓練步數設定
 PRETRAIN_BUY_STEPS = 1_000_000
@@ -20,9 +70,31 @@ PRETRAIN_SELL_STEPS = 500_000
 FINETUNE_BUY_STEPS = 1_000_000
 FINETUNE_SELL_STEPS = 500_000
 
-- 最佳模型步數
+- 最佳模型步數: 以下是從 TensorBoard 事件檔案中讀取的 精確最佳步數
 buy: 184萬步
 sell: 92萬步
+
+Agent	 階段	      最佳步數	 最佳 Reward	 評估次數
+Buy	   Pre-train	560,000	  0.36	        12 次
+Buy	   Fine-tune	1,280,000	0.03	        25 次
+Sell	 Pre-train	160,000	  53.50	        6 次
+Sell	 Fine-tune	320,000	  51.30	        12 次
+
+根據以上數據，最佳模型出現的位置：
+Agent	 階段	       建議設定
+Buy	   Pre-train	 600,000 (最佳在 560K)
+Buy	   Fine-tune	 300,000 (最佳在 Fine-tune 第 280K)
+Sell	 Pre-train	 200,000 (最佳在 160K)
+Sell	 Fine-tune	 350,000 (最佳在 320K)
+
+- 正規化方式
+特徵	       正規化方法	   最終命名
+K (9,3)	     / 100.0	   Norm_K
+D (9,3)	     / 100.0	   Norm_D
+DIF (12-26)	 / Close	   Norm_DIF
+MACD9	      / Close	     Norm_MACD
+OSC	        / Close	     Norm_OSC
+
 
 
 # 沿用 v03-04 可以讀取 回測持倉狀態 的 盤中daily_ops_v4_intraday_fixed_lstm.py，且採用了固定的LSTM  backtest_v4_dca_hybrid_with_filter_fixed_lstm.py 以確保每日回測的結果一致。因此建議的操作流程簡化如下:
@@ -39,12 +111,20 @@ sell: 92萬步
       更新 open_positions_strat2_*.csv（你的 AI 持倉明細）
 
       # Step 2: 執行 daily_ops_盤後 (基於最新持倉判斷)
+      (自動選擇最新的回測檔案)
       python daily_ops_v4_fixed_lstm.py
       
+      🎯 如何指定特定回測？
+      方法 1：使用互動模式
+      python daily_ops_v4_fixed_lstm.py --interactive
+
+      方法 2：指定回測開始日期
+      python daily_ops_v4_fixed_lstm.py --backtest-start 2025-12-09
+
       
       ☀️ 隔天盤中（開盤後任意時間）
       
-      # Step 3: 執行 daily_ops_盤中 (基於最新持倉判斷)
+      # Step 3: 執行 daily_ops_盤中 (互動選取要用的回測)
       python daily_ops_v4_intraday_fixed_lstm.py -i
       
       這會：
@@ -56,8 +136,8 @@ sell: 92萬步
       Fixed LSTM 盤中腳本保留了完全相同的功能：
       # 方式 1: 互動式選擇 (用方向鍵)
       python daily_ops_v4_intraday_fixed_lstm.py -i
-      # 方式 2: 直接指定起始日
-      python daily_ops_v4_intraday_fixed_lstm.py --backtest-start 2025-01-02
+      # 方式 2: 指定回測起始日
+      python daily_ops_v4_intraday_fixed_lstm.py --backtest-start 2025-12-09
       # 方式 3: 使用最新 (預設)
       python daily_ops_v4_intraday_fixed_lstm.py
 

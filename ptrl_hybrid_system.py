@@ -76,6 +76,12 @@ FEATURE_COLS = [
     'Feat_Dist_MA60',    # 季線支撐距離
     'Feat_Dist_MA240',   # 年線生命線位置
     'Feat_Vol_Ratio',    # 相對成交量突波
+    # [v4.2] 新增 KD 與 MACD 特徵
+    'Norm_K',            # Stochastic K(9,3) / 100
+    'Norm_D',            # Stochastic D(9,3) / 100
+    'Norm_DIF',          # MACD DIF(12,26) / Close
+    'Norm_MACD',         # MACD Signal(9) / Close
+    'Norm_OSC',          # MACD OSC (DIF - MACD) / Close
 ]
 
 CACHE_DIR = "data/processed"
@@ -518,6 +524,30 @@ def calculate_features(df_in: pd.DataFrame, benchmark_df: pd.DataFrame,
     # (6) 相對成交量突波: Volume / MA_Vol_20
     # 加 1e-8 防止除以零
     df['Feat_Vol_Ratio'] = (df['Volume'] / (df['MA_Vol_20'] + 1e-8)).fillna(0)
+    
+    # -------------------------------------------------------------------------
+    # [v4.2] 新增 KD 與 MACD 特徵
+    # -------------------------------------------------------------------------
+    # 1. Stochastic KD (9, 3)
+    low_min_9 = df['Low'].rolling(9).min()
+    high_max_9 = df['High'].rolling(9).max()
+    rsv = ((df['Close'] - low_min_9) / (high_max_9 - low_min_9 + 1e-9)) * 100
+    df['K_raw'] = rsv.rolling(3).mean()  # K(9,3)
+    df['D_raw'] = df['K_raw'].rolling(3).mean()  # D(9,3)
+    df['Norm_K'] = (df['K_raw'] / 100.0).fillna(0.5)
+    df['Norm_D'] = (df['D_raw'] / 100.0).fillna(0.5)
+    
+    # 2. MACD (12, 26, 9)
+    ema_12 = df['Close'].ewm(span=12, adjust=False).mean()
+    ema_26 = df['Close'].ewm(span=26, adjust=False).mean()
+    df['DIF'] = ema_12 - ema_26  # DIF (快線 - 慢線)
+    df['MACD_Signal'] = df['DIF'].ewm(span=9, adjust=False).mean()  # MACD Signal
+    df['OSC'] = df['DIF'] - df['MACD_Signal']  # OSC (柱狀圖)
+    
+    # 正規化：除以收盤價 (轉為百分比概念)
+    df['Norm_DIF'] = (df['DIF'] / df['Close']).fillna(0)
+    df['Norm_MACD'] = (df['MACD_Signal'] / df['Close']).fillna(0)
+    df['Norm_OSC'] = (df['OSC'] / df['Close']).fillna(0)
     
     # 移除計算過程中產生的暫時欄位 (保留 MA 以便 debug 也可以，但這裡先保持乾淨)
     # df = df.drop(columns=['MA20', 'MA60', 'MA240', 'MA_Vol_20']) 
